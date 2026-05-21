@@ -32,6 +32,8 @@ from pathlib import Path
 import numpy as np
 
 import dmd_toolkit as dmd
+from dmd_toolkit.pidmd import piDMD, CONSTRAINTS as PIDMD_CONSTRAINTS
+from dmd_toolkit.kernel import KernelDMD
 from dmd_toolkit.neural import (
     DiscrepancyModel,
     fit_dpk,
@@ -405,6 +407,56 @@ def run_koopman_ae(ds: Dataset, X_tr, X_te, t_tr, t_te, scale, epochs):
     )
 
 
+def run_pidmd(ds: Dataset, X_tr, X_te, t_tr, t_te, scale, constraint="unitary"):
+    t0 = time.perf_counter()
+    try:
+        model = dmd.pidmd(X_tr, constraint=constraint, rank=ds.rank, dt=ds.dt)
+        fit_s = time.perf_counter() - t0
+        recon = model.reconstruct(t_tr - t_tr[0])
+        fc = model.reconstruct(t_te - t_tr[0])
+        return dict(
+            fit_time_s=fit_s,
+            recon_rmse=normalised_rmse(X_tr, recon, scale),
+            forecast_rmse=normalised_rmse(X_te, fc, scale),
+            n_params=ds.rank,
+            notes=f"constraint={constraint}",
+        )
+    except Exception as e:
+        return dict(
+            fit_time_s=time.perf_counter() - t0,
+            recon_rmse=math.nan, forecast_rmse=math.nan,
+            n_params=ds.rank,
+            notes=f"error:{type(e).__name__}",
+        )
+
+
+def run_kernel_dmd(ds: Dataset, X_tr, X_te, t_tr, t_te, scale):
+    # Kernel DMD works on real data; use X_real views
+    Xr_tr = ds.X_real[:, : X_tr.shape[1]]
+    Xr_te = ds.X_real[:, X_tr.shape[1] : X_tr.shape[1] + X_te.shape[1]]
+    rank = min(ds.rank * 4, Xr_tr.shape[1] - 1)
+    t0 = time.perf_counter()
+    try:
+        model = KernelDMD(kernel="rbf", rank=rank, dt=ds.dt).fit(Xr_tr)
+        fit_s = time.perf_counter() - t0
+        recon = model.reconstruct(t_tr - t_tr[0])
+        fc = model.reconstruct(t_te - t_tr[0])
+        return dict(
+            fit_time_s=fit_s,
+            recon_rmse=normalised_rmse(Xr_tr, recon, float(Xr_tr.std()) + 1e-12),
+            forecast_rmse=normalised_rmse(Xr_te, fc, float(Xr_tr.std()) + 1e-12),
+            n_params=rank,
+            notes=f"kernel=rbf,rank={rank}",
+        )
+    except Exception as e:
+        return dict(
+            fit_time_s=time.perf_counter() - t0,
+            recon_rmse=math.nan, forecast_rmse=math.nan,
+            n_params=rank,
+            notes=f"error:{type(e).__name__}",
+        )
+
+
 METHODS = [
     ("ExactDMD", run_exact, False),
     ("OptimizedDMD", run_optimized, False),
@@ -416,6 +468,10 @@ METHODS = [
     ("Discrepancy", run_discrepancy, True),
     ("SKS", run_sks, True),
     ("KoopmanAE", run_koopman_ae, True),
+    ("piDMD-unitary", lambda ds, *a: run_pidmd(ds, *a, constraint="unitary"), False),
+    ("piDMD-symmetric", lambda ds, *a: run_pidmd(ds, *a, constraint="symmetric"), False),
+    ("piDMD-diagonal", lambda ds, *a: run_pidmd(ds, *a, constraint="diagonal"), False),
+    ("KernelDMD", run_kernel_dmd, False),
 ]
 
 

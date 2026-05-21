@@ -1,6 +1,6 @@
 # dmd-toolkit
 
-Python implementations of the five most-used Dynamic Mode Decomposition variants from Nathan Kutz's group at UW Applied Math, packaged for drop-in use on any snapshot dataset.
+Python implementations of DMD variants from Nathan Kutz's group at UW Applied Math, packaged for drop-in use on any snapshot dataset. Covers classical, physics-informed, kernel, and neural methods.
 
 ## What is DMD?
 
@@ -10,13 +10,22 @@ Originated by Schmid (2010) for fluid dynamics. The variants below are refinemen
 
 ## Variants implemented
 
+**Classical:**
+
 | Class | Best for | Paper |
 |---|---|---|
 | `ExactDMD` | Clean, evenly-sampled snapshots | Tu, Rowley, Luchtenburg, Brunton, Kutz (2014) |
 | `OptimizedDMD` | Noisy data, uneven sampling | Askham & Kutz, SIAM JADS (2018) |
 | `BOPDMD` | Uncertainty quantification, forecasting | Sashidhar & Kutz, Phil. Trans. R. Soc. A (2022) |
 | `MultiResolutionDMD` | Multi-scale data (slow + fast modes) | Kutz, Fu, Brunton, SIAM JADS (2016) |
-| `HAVOK` | Chaotic / intermittently-forced scalar signals | Brunton, Brunton, Proctor, Kaiser, Kutz, Nat. Commun. (2017) |
+| `HAVOK` | Chaotic / intermittently-forced scalar signals | Brunton et al., Nat. Commun. (2017) |
+
+**Physics-informed & kernel:**
+
+| Class | Best for | Paper |
+|---|---|---|
+| `piDMD` | Constrained operators (unitary, symmetric, diagonal, circulant, …) | Baddoo, Herrmann, McKeon, Kutz, Brunton, Proc. R. Soc. A (2023) |
+| `KernelDMD` | Nonlinear Koopman approximation without a manual dictionary | Williams, Rowley, Kevrekidis (2015); Panda, Singh, Kutz (2025) |
 
 ## Install
 

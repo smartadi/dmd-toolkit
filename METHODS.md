@@ -233,6 +233,74 @@ on the manifold rather than just forecasts.
 
 ---
 
+---
+
+### 11. piDMD — Physics-Informed DMD
+
+**Reference:** Baddoo, Herrmann, McKeon, Kutz, Brunton — *Proc. R. Soc. A* 479 (2023).
+**Module:** `dmd_toolkit.pidmd` · **API:** `piDMD`, `pidmd(data, constraint, rank, dt)`
+
+Standard DMD finds the unconstrained least-squares operator. piDMD instead
+solves
+
+$$\min_{A \in \mathcal C} \|X_2 - A X_1\|_F$$
+
+where the constraint set $\mathcal C$ encodes known physics. Five constraints:
+
+| `constraint=` | Structure | Closed form |
+|---|---|---|
+| `"unitary"` | $A^* A = I$ (energy-preserving) | Procrustes: SVD of $X_2 X_1^*$ |
+| `"symmetric"` | $A = A^*$ (self-adjoint, real spectrum) | Lyapunov eq. $AG + GA = M + M^*$ |
+| `"skew_symmetric"` | $A = -A^*$ (purely imaginary spectrum) | Sylvester eq. $AG - GA = M - M^*$ |
+| `"diagonal"` | Per-feature scalar fit | Channel-wise ratio |
+| `"circulant"` | Translation-invariant | DFT-domain diagonal |
+
+For the non-local constraints, fitting happens in an SVD-reduced subspace
+(`rank` controls truncation); modes are lifted back to full space.
+
+**Use when:** you have physical knowledge of the operator structure. `"unitary"`
+enforces energy conservation (Hamiltonian systems, lossless wave propagation);
+`"symmetric"` is appropriate for self-adjoint PDE operators; `"diagonal"` is the
+fastest zero-coupling baseline.
+
+---
+
+### 12. Kernel DMD
+
+**References:**
+- Williams, Rowley, Kevrekidis — *J. Nonlinear Sci.* 25 (2015).
+- Panda, Singh, Kutz — arxiv:2505.06806 (2025).
+
+**Module:** `dmd_toolkit.kernel` · **API:** `KernelDMD`, `kernel_dmd(data, kernel, rank, dt)`
+
+Lifts snapshots through a (possibly infinite-dimensional) feature map
+$\psi(x)$ implicitly via kernel evaluations
+$k(x, y) = \langle\psi(x), \psi(y)\rangle$, then fits a linear Koopman
+operator in feature space. Two Gram matrices
+
+$$G_{ij} = k(x_i, x_j), \qquad A_{ij} = k(x_{i+1}, x_j)$$
+
+define a reduced Koopman matrix $\hat K = \Sigma^{-1} Q^\top A Q \Sigma^{-1}$
+where $G = Q \Sigma^2 Q^\top$. Eigenvalues of $\hat K$ approximate the Koopman
+spectrum; eigenfunctions are evaluated on new points via
+$\phi_j(x) = v_j^* (\Sigma^+ Q^\top k(X_1, x))$.
+
+Koopman modes $\xi_j$ for the identity observable are recovered by projecting
+training snapshots onto the eigenfunction matrix.
+
+Kernels supported: `"rbf"` (Gaussian, median-heuristic bandwidth by default),
+`"linear"` (equivalent to DMD on $\text{Re}(X)$), `"poly"` (polynomial
+degree `degree` with bias `coef0`).
+
+Panda/Singh/Kutz (2025) regularisation: a Tikhonov ridge $\epsilon I$ on $G$
+before pseudo-inversion stabilises the spectrum when $G$ is near-singular.
+
+**Use when:** the dynamics are nonlinear and you want Koopman eigenfunctions
+without manually specifying a dictionary. RBF kernel adapts to the data
+geometry; use `rank` to control approximation quality vs. cost.
+
+---
+
 ## Quick chooser
 
 | Need | Use |
@@ -242,6 +310,8 @@ on the manifold rather than just forecasts.
 | Eigenvalue uncertainty bands | **BOPDMD** |
 | Multi-scale / non-stationary signals | **MultiResolutionDMD** |
 | Chaotic scalar signal | **HAVOK** |
+| Physics constraints (energy-preserving, symmetric, …) | **piDMD** |
+| Nonlinear Koopman without a manual dictionary | **KernelDMD** |
 | Full field from a handful of sensors | **SHRED** |
 | Probabilistic forecast with intervals | **DeepProbKoopman** |
 | DMD + learned correction | **DiscrepancyModel** |
