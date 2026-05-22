@@ -34,6 +34,7 @@ import numpy as np
 import dmd_toolkit as dmd
 from dmd_toolkit.pidmd import piDMD, CONSTRAINTS as PIDMD_CONSTRAINTS
 from dmd_toolkit.kernel import KernelDMD
+from dmd_toolkit.multishot import MultiShotDMD
 from dmd_toolkit.neural import (
     DiscrepancyModel,
     fit_dpk,
@@ -407,6 +408,40 @@ def run_koopman_ae(ds: Dataset, X_tr, X_te, t_tr, t_te, scale, epochs):
     )
 
 
+def run_multishot(ds: Dataset, X_tr, X_te, t_tr, t_te, scale):
+    """Split training data into pseudo-trials and fit multi-shot DMD."""
+    n_feat, n_snap = X_tr.shape
+    n_trials = 4
+    trial_len = n_snap // n_trials
+    if trial_len < 4:
+        return dict(fit_time_s=math.nan, recon_rmse=math.nan,
+                    forecast_rmse=math.nan, n_params=ds.rank,
+                    notes="skipped:too_short")
+    n_use = n_trials * trial_len
+    X3d = X_tr[:, :n_use].reshape(n_feat, n_trials, trial_len)
+    t0 = time.perf_counter()
+    try:
+        model = MultiShotDMD(rank=ds.rank, dt=ds.dt).fit(X3d)
+        fit_s = time.perf_counter() - t0
+        t_rel_tr = t_tr[:trial_len] - t_tr[0]
+        recon_all = model.reconstruct_all(t_rel_tr)  # (n_feat, n_trials, trial_len)
+        recon_flat = recon_all.reshape(n_feat, -1)[:, :n_use]
+        recon_rmse = normalised_rmse(X_tr[:, :n_use], recon_flat, scale)
+        # Forecast: roll each trial forward using shared eigenvalues
+        n_fc = X_te.shape[1]
+        t_fc = np.arange(1, n_fc + 1) * ds.dt
+        fc_all = model.reconstruct_all(t_fc)  # forecast from t=0 for each trial
+        fc_mean = np.mean(np.real(fc_all), axis=1)  # average over trials
+        fc_rmse = normalised_rmse(np.real(X_te), fc_mean, scale)
+        return dict(fit_time_s=fit_s, recon_rmse=recon_rmse,
+                    forecast_rmse=fc_rmse, n_params=ds.rank,
+                    notes=f"n_trials={n_trials},trial_len={trial_len}")
+    except Exception as e:
+        return dict(fit_time_s=time.perf_counter() - t0,
+                    recon_rmse=math.nan, forecast_rmse=math.nan,
+                    n_params=ds.rank, notes=f"error:{type(e).__name__}")
+
+
 def run_pidmd(ds: Dataset, X_tr, X_te, t_tr, t_te, scale, constraint="unitary"):
     t0 = time.perf_counter()
     try:
@@ -472,6 +507,7 @@ METHODS = [
     ("piDMD-symmetric", lambda ds, *a: run_pidmd(ds, *a, constraint="symmetric"), False),
     ("piDMD-diagonal", lambda ds, *a: run_pidmd(ds, *a, constraint="diagonal"), False),
     ("KernelDMD", run_kernel_dmd, False),
+    ("MultiShotDMD", run_multishot, False),
 ]
 
 

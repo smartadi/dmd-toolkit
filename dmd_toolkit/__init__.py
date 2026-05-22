@@ -7,6 +7,7 @@ from .multires import MultiResolutionDMD, mr_dmd
 from .havok import HAVOK, havok
 from .pidmd import piDMD, pidmd
 from .kernel import KernelDMD, kernel_dmd
+from .multishot import MultiShotDMD, multi_shot_dmd
 from . import data
 from . import plot
 from . import utils
@@ -27,6 +28,8 @@ __all__ = [
     "pidmd",
     "KernelDMD",
     "kernel_dmd",
+    "MultiShotDMD",
+    "multi_shot_dmd",
     "data",
     "plot",
     "utils",
