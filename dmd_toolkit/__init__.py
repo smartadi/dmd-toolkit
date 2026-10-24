@@ -11,7 +11,10 @@ from .multishot import MultiShotDMD, multi_shot_dmd
 from . import data
 from . import plot
 from . import utils
-from . import neural
+try:
+    from . import neural
+except ImportError:
+    neural = None
 
 __all__ = [
     "ExactDMD",
